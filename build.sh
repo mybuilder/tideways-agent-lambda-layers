@@ -2,26 +2,28 @@
 
 set -e
 
-PHP_VERSIONS=(72) # 73 74)
+PHP_VERSIONS=(72 73 74)
 TIDEWAYS_VERSION=5.1.14
-AWS_REGION=eu-west-1
-ROOT_DIR=$(pwd)
-BUILD_DIR="${ROOT_DIR}/build"
+LAYERS_DIR=$(pwd)/layers
+
+mkdir -p "${LAYERS_DIR}"
 
 for PHP_VERSION in "${PHP_VERSIONS[@]}"; do
   echo ""
   echo "### Building Tideways ${TIDEWAYS_VERSION} for PHP ${PHP_VERSION}"
   echo ""
 
-  docker build \
-    --build-arg PHP_VERSION="${PHP_VERSION}" \
-    --build-arg TIDEWAYS_VERSION="${TIDEWAYS_VERSION}" \
-    -t "tideways-${TIDEWAYS_VERSION}-php-${PHP_VERSION}" .
+  IMAGE="tideways-${TIDEWAYS_VERSION}-php-${PHP_VERSION}"
+  ZIP_PATH="${LAYERS_DIR}/${IMAGE}.zip"
 
-  mkdir -p "${BUILD_DIR}/tmp" && rm -fr "${BUILD_DIR:?}/tmp/*" && cd "${BUILD_DIR}/tmp"
-  docker run --entrypoint tar "tideways-${TIDEWAYS_VERSION}-php-${PHP_VERSION}" -ch -C /opt . | tar -x
-  zip --quiet -X --recurse-paths "${BUILD_DIR}/tideways-${TIDEWAYS_VERSION}-php-${PHP_VERSION}.zip" .
-  cd "${ROOT}" && rm -fr "${BUILD_DIR}/tmp"
+  docker build -t "${IMAGE}" \
+    --build-arg PHP_VERSION="${PHP_VERSION}" \
+    --build-arg TIDEWAYS_VERSION="${TIDEWAYS_VERSION}" .
+
+  BUILD_DIR=$(pwd)/build/"${IMAGE}"
+  rm -rf "${BUILD_DIR}" && mkdir -p "${BUILD_DIR}"
+  docker run --entrypoint tar "${IMAGE}" -ch -C /opt . | tar -x -C "${BUILD_DIR}"
+  cd "${BUILD_DIR}" && zip -X "${ZIP_PATH}" ./* && cd - >/dev/null
 
   echo ""
   echo "### Publishing Tideways ${TIDEWAYS_VERSION} for PHP ${PHP_VERSION}"
@@ -29,10 +31,10 @@ for PHP_VERSION in "${PHP_VERSIONS[@]}"; do
 
   LAYER_VERSION=$(
     aws lambda publish-layer-version \
-      --region "${AWS_REGION}" \
+      --region eu-west-1 \
       --layer-name "tideways-php-${PHP_VERSION}" \
-      --description "tideways-${TIDEWAYS_VERSION}-php-${PHP_VERSION}" \
-      --zip-file "fileb://build/tideways-${TIDEWAYS_VERSION}-php-${PHP_VERSION}.zip" \
+      --description "${IMAGE}" \
+      --zip-file "fileb://${ZIP_PATH}" \
       --compatible-runtimes provided \
       --license-info MIT \
       --output text \
@@ -40,7 +42,7 @@ for PHP_VERSION in "${PHP_VERSIONS[@]}"; do
   )
 
   aws lambda add-layer-version-permission \
-    --region "${AWS_REGION}" \
+    --region eu-west-1 \
     --layer-name "tideways-php-${PHP_VERSION}" \
     --version-number "${LAYER_VERSION}" \
     --action lambda:GetLayerVersion \
