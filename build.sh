@@ -2,6 +2,11 @@
 
 set -e
 
+command -v aws >/dev/null || {
+  echo 'ERROR: aws command is missing' >&2
+  exit 1
+}
+
 PHP_VERSIONS=(72 73 74)
 TIDEWAYS_VERSION=5.1.14
 LAYERS_DIR=$(pwd)/layers
