@@ -8,7 +8,7 @@ command -v aws >/dev/null || {
 }
 
 PHP_VERSIONS=(72 73 74)
-TIDEWAYS_VERSION=5.1.14
+TIDEWAYS_VERSION=5.1.18
 LAYERS_DIR=$(pwd)/layers
 
 mkdir -p "${LAYERS_DIR}"
